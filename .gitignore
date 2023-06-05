@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE-specific files
+.idea/
+
+# Environment variables
+.env
+env
+
+# Database
+test_db.db
+
+# Image files
+*.png
+*.jpeg
+*.jpg
+*.heic
+
+# Compressed files
+*.zip
+
+events.out.tfevents*

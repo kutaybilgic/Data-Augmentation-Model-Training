@@ -1,4 +1,3 @@
-#Load libraries
 import os
 import numpy as np
 import torch
@@ -7,10 +6,12 @@ import torch.nn as nn
 from torchvision.transforms import transforms
 from torch.utils.data import DataLoader
 from torch.optim import Adam
+from torch.optim.lr_scheduler import StepLR
 from torch.autograd import Variable
 import torchvision
 import pathlib
 import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
@@ -27,13 +28,15 @@ transformer=transforms.Compose([
                         [0.5,0.5,0.5])
 ])
 
+writer = SummaryWriter('runs/experiment_2')
+
 
 #Dataloader
 
 #Path for training and testing directory
 # C:\Users\Çağdaş\Desktop\pytorch_projects\scene_detection\seg_train
-train_path='/Users/drivers/Desktop/ceng318/train/'
-test_path='/Users/drivers/Desktop/ceng318/test/'
+train_path='D:/Github\Data-Augmentation-Model-Training/train'
+test_path='D:/Github\Data-Augmentation-Model-Training/test'
 
 train_loader=DataLoader(
     torchvision.datasets.ImageFolder(train_path,transform=transformer),
@@ -53,75 +56,75 @@ print(classes)
 
 
 class ConvNet(nn.Module):
-    def __init__(self, num_classes=16):
+    def __init__(self, num_classes=12):
         super(ConvNet, self).__init__()
 
-        # Output size after convolution filter
-        # ((w-f+2P)/s) +1
+        self.layer1 = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=12, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(num_features=12),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Dropout2d(p=0.2)
+        )
 
-        # Input shape= (256,3,150,150)
+        self.layer2 = nn.Sequential(
+            nn.Conv2d(in_channels=12, out_channels=20, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Dropout2d(p=0.3)
+        )
 
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=12, kernel_size=3, stride=1, padding=1)
-        # Shape= (256,12,150,150)
-        self.bn1 = nn.BatchNorm2d(num_features=12)
-        # Shape= (256,12,150,150)
-        self.relu1 = nn.ReLU()
-        # Shape= (256,12,150,150)
+        self.layer3 = nn.Sequential(
+            nn.Conv2d(in_channels=20, out_channels=32, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(num_features=32),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Dropout2d(p=0.4)
+        )
 
-        self.pool = nn.MaxPool2d(kernel_size=2)
-        # Reduce the image size be factor 2
-        # Shape= (256,12,75,75)
+        self.layer4 = nn.Sequential(
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(num_features=64),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Dropout2d(p=0.5)
+        )
 
-        self.conv2 = nn.Conv2d(in_channels=12, out_channels=20, kernel_size=3, stride=1, padding=1)
-        # Shape= (256,20,75,75)
-        self.relu2 = nn.ReLU()
-        # Shape= (256,20,75,75)
+        self.layer5 = nn.Sequential(
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(num_features=128),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Dropout2d(p=0.6)
+        )
 
-        self.conv3 = nn.Conv2d(in_channels=20, out_channels=32, kernel_size=3, stride=1, padding=1)
-        # Shape= (256,32,75,75)
-        self.bn3 = nn.BatchNorm2d(num_features=32)
-        # Shape= (256,32,75,75)
-        self.relu3 = nn.ReLU()
-        # Shape= (256,32,75,75)
-
-        self.fc = nn.Linear(in_features=75 * 75 * 32, out_features=num_classes)
-
-        # Feed forwad function
+        self.fc = nn.Linear(in_features=18 * 18 * 32, out_features=num_classes)
 
     def forward(self, input):
-        output = self.conv1(input)
-        output = self.bn1(output)
-        output = self.relu1(output)
-
-        output = self.pool(output)
-
-        output = self.conv2(output)
-        output = self.relu2(output)
-
-        output = self.conv3(output)
-        output = self.bn3(output)
-        output = self.relu3(output)
-
-        # Above output will be in matrix form, with shape (256,32,75,75)
-
-        output = output.view(-1, 32 * 75 * 75)
-
+        output = self.layer1(input)
+        output = self.layer2(output)
+        output = self.layer3(output)
+        output = output.view(-1, 18 * 18 * 32)
         output = self.fc(output)
-
         return output
 
-model=ConvNet(num_classes=16).to(device)
+model=ConvNet(num_classes=12).to(device)
 model.cuda()
+
 
 #Optmizer and loss function
 optimizer=Adam(model.parameters(),lr=0.001,weight_decay=0.0001)
 loss_function=nn.CrossEntropyLoss()
+scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
 
 num_epochs = 30
 
 #calculating the size of training and testing images
 train_count=len(glob.glob(train_path+'/**/*.png'))
-test_count=len(glob.glob(test_path+'/**/*.jpeg'))
+test_count=len(glob.glob(test_path+'/**/*.jpg'))
+
+#Optmizer, loss function and learning rate scheduler
+
 
 # Model training and saving best model
 
@@ -157,6 +160,7 @@ for epoch in range(num_epochs):
 
     train_accuracy = train_accuracy / train_count
     train_loss = train_loss / train_count
+    scheduler.step()
 
     # Evaluation on testing dataset
     model.eval()
@@ -179,6 +183,10 @@ for epoch in range(num_epochs):
     test_acc_arr.append(test_accuracy)
     train_acc_arr.append(train_accuracy)
     train_loss_arr.append(train_loss)
+
+    writer.add_scalar('Training Loss', train_loss, epoch)
+    writer.add_scalar('Training Accuracy', train_accuracy, epoch)
+    writer.add_scalar('Test Accuracy', test_accuracy, epoch)
 
     # Save the best model
     if test_accuracy > best_accuracy:
